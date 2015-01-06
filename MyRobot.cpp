@@ -1,8 +1,8 @@
 #include "WPILib.h"
+#include "controller-macros.h"
 
 class MyRobot: public SampleRobot
 {
-//asdsd
 
 public:
 	MyRobot()
