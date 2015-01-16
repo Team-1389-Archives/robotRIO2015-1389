@@ -21,11 +21,12 @@
 //#define TEST_VICTOR_PORT 4
 //Constants used
 #define ELEVATOR_SPEED 1
-#define GLOBAL_SPEED_MODIFIER 1
+#define GLOBAL_SPEED_MODIFIER .5
 #define FOUR_WHEEL_LIMITER 1.41421356237
 
 class MyRobot: public SampleRobot {
 
+	const bool isDEBUGGING=true;
 	int iterationNumber;
 	float currTime = 0;
 	Timer* threadTime;
@@ -33,18 +34,25 @@ class MyRobot: public SampleRobot {
 	Joystick *driver, *func;
 	DigitalInput *IRa, *IRb, *IRc, *IRd, *IRe, *limitOne, *limitTwo;
 	Talon *FRdrive, *FLdrive, *BRdrive, *BLdrive;
-	Victor *testMotor;
+	//Victor *testMotor;
 	Victor *elevatorOne, *elevatorTwo;
 	RobotDrive *drive;
 	Encoder *cody, *codec;
 
 public:
+	/**Constructor
+	 *
+	 */
 	MyRobot()
 
 {
 		mainInstance();
 		//ConfigureEncoders();
 }
+
+	/**
+	 * Autonomous code
+	 */
 	void Autonomous() {
 		const double defaultSpeed = -0.5;
 		while(!limitOne->Get() && ! limitTwo->Get() && IsAutonomous()){
@@ -66,9 +74,13 @@ public:
 		}
 	}
 
+	/**
+	 * Teleop Code
+	 */
 	void OperatorControl() {
 		threadTime->Start(); //mr chen was here
 		while (IsOperatorControl()) {
+			//testMotor->Set(1);
 
 			SmartDashboard::PutNumber("PWMValue", codec->GetRate());
 			//SmartDashboard::PutNumber("PWM Value", tester->GetRaw());
@@ -81,7 +93,7 @@ public:
 			SmartDashboard::PutNumber("LeftAnalog Y axis",
 					driver->GetRawAxis(LeftY));
 
-			elevatorOne->Set(rampUp(1,12));
+			//elevatorOne->Set(rampUp(1,12));
 
 			//LiftControl();
 			FourCIMDrive();
@@ -90,14 +102,11 @@ public:
 		threadTime->Reset();
 	}
 
-
-
-
-
-
-
-
-
+	/**
+	 * LiftControl
+	 * checks if lift is at top with infrared sensor
+	 *
+	 */
 	void LiftControl() {
 		float rightAnalogPush = func->GetRawAxis(RightY) * -1;
 		int direction = 0;
@@ -137,8 +146,21 @@ public:
 			direction = -1;
 			elevatorOne->Set(ELEVATOR_SPEED * -1);
 		}
+
+		if (func->GetRawAxis(3) < -.2)
+		{
+			elevatorTwo->Set(-1);
+		}
+		if (func->GetRawAxis(3) > .2)
+		{
+			elevatorTwo->Set(1);
+		}
 	}
 
+	/**
+	 * ConfigureEncoders
+	 * sets parameters of Encoders
+	 */
 	void ConfigureEncoders() {
 		cody->SetMaxPeriod(.1);
 		cody->SetMinRate(10);
@@ -153,6 +175,10 @@ public:
 		codec->SetSamplesToAverage(7);
 	}
 
+	/**
+	 * absolute value
+	 * returns the absolute value of a number
+	 **/
 	int abs(float num)
 	{
 		if (num < 0)
@@ -181,6 +207,8 @@ public:
 		return 0;
 	}
 
+
+	//main Drive code
 	void FourCIMDrive() {
 		float x, y;
 		x = driver->GetRawAxis(LeftX) * -1;
@@ -189,10 +217,31 @@ public:
 		//FRdrive ->Set((y - x) / FOUR_WHEEL_LIMITER);
 		//FLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
 		//BRdrive ->Set((y - x) / FOUR_WHEEL_LIMITER);
-		//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
-		drive->ArcadeDrive(y * GLOBAL_SPEED_MODIFIER,
-				x * GLOBAL_SPEED_MODIFIER);
+		float turn=LimitTeleOp();
+		SmartDashboard::PutNumber("turn: ",turn);
+		if (driver->GetRawButton(ButtonB))
+		{
+			//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
+			if(turn!=0)
+				x=turn;
+		}
+		SmartDashboard::PutBoolean("B Button Press", driver->GetRawButton(ButtonB));
+		SmartDashboard::PutNumber("x: ",x);
+		drive->ArcadeDrive(y * GLOBAL_SPEED_MODIFIER,x *GLOBAL_SPEED_MODIFIER);
+	}
 
+	//Turns robot appropriately when either one of the limit switches are turned on
+	float LimitTeleOp(){
+		float turn = 0.0;
+
+
+		if(limitOne->Get()){
+			turn += 1;
+		}
+		if(limitTwo->Get()){
+			turn -= 1;
+		}
+		return turn;
 	}
 
 	void mainInstance()
@@ -211,7 +260,7 @@ public:
 		elevatorTwo = new Victor(ELEVATOR_TWO_PWM_PORT);
 		func = new Joystick(FUNC_JOYSTICK_PORT);
 		driver = new Joystick(DRIVE_JOYSTICK_PORT);
-		testMotor = new Victor(6);
+		//testMotor = new Victor(6);
 		drive = new RobotDrive(FLdrive, BLdrive, FRdrive, BRdrive);
 	}
 
