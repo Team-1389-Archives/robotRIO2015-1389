@@ -21,7 +21,6 @@
 //#define TEST_VICTOR_PORT 4
 //Constants used
 #define ELEVATOR_SPEED 1
-#define GLOBAL_SPEED_MODIFIER .5
 #define FOUR_WHEEL_LIMITER 1.41421356237
 
 class MyRobot: public SampleRobot {
@@ -31,12 +30,14 @@ class MyRobot: public SampleRobot {
 	float currTime = 0;
 	Timer* threadTime;
 	bool fin = false;
+	bool neutral, up, temp;
 	Joystick *driver, *func;
 	DigitalInput *IRa, *IRb, *IRc, *IRd, *IRe, *limitOne, *limitTwo;
 	Talon *FRdrive, *FLdrive, *BRdrive, *BLdrive;
 	//Victor *testMotor;
 	Victor *elevatorOne, *elevatorTwo;
 	RobotDrive *drive;
+	PowerDistributionPanel* smart;
 	Encoder *cody, *codec;
 
 public:
@@ -126,12 +127,12 @@ public:
 			direction = 1;
 			elevatorOne->Set(ELEVATOR_SPEED);
 		}
-		if (func->GetRawAxis(3) > .4
+		if (func->GetRawAxis(LeftTrigger) > .4
 				&& !IRd->Get()) {
 			direction = 1;
 			elevatorOne->Set(ELEVATOR_SPEED);
 		}
-		if (func->GetRawAxis(3) < -.4
+		if (func->GetRawAxis(RightTrigger) > .4
 				&& !IRe->Get()) {
 			direction = 1;
 			elevatorOne->Set(ELEVATOR_SPEED);
@@ -186,6 +187,23 @@ public:
 		return num;
 	}
 
+	bool nuetralToPush()
+	{
+
+		float magnitude = sqrt(pow(driver->GetRawAxis(LeftX), 2) + pow(driver->GetRawAxis(LeftY), 2));
+		neutral = (magnitude < .2);
+		if (neutral)
+			temp = true;
+		up = (magnitude > .2);
+
+		if (up && temp)
+		{
+			return true;
+			temp = false;
+		}
+		return false;
+	}
+
 	float rampUp(float maxPower, float time)
 	{
 
@@ -211,14 +229,25 @@ public:
 	//main Drive code
 	void FourCIMDrive() {
 		float x, y;
+		int modifier = 1;
+		bool ramp = false;
 		x = driver->GetRawAxis(LeftX) * -1;
 		y = driver->GetRawAxis(LeftY);
+		float time;
 
-		//FRdrive ->Set((y - x) / FOUR_WHEEL_LIMITER);
-		//FLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
-		//BRdrive ->Set((y - x) / FOUR_WHEEL_LIMITER);
 		float turn=LimitTeleOp();
 		SmartDashboard::PutNumber("turn: ",turn);
+
+		if (driver->GetRawButton(BumperR))
+		{
+			if (modifier + .25 < 1)
+				modifier+= .25;
+		}
+		if (driver->GetRawButton(BumperL))
+		{
+			if (modifier - .25 > 0)
+				modifier-= .25;
+		}
 		if (driver->GetRawButton(ButtonB))
 		{
 			//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
@@ -227,7 +256,29 @@ public:
 		}
 		SmartDashboard::PutBoolean("B Button Press", driver->GetRawButton(ButtonB));
 		SmartDashboard::PutNumber("x: ",x);
-		drive->ArcadeDrive(y * GLOBAL_SPEED_MODIFIER,x *GLOBAL_SPEED_MODIFIER);
+		SmartDashboard::PutNumber("Speed modifier", modifier);
+
+		if (nuetralToPush())
+		{
+			time = threadTime->Get();
+		}
+		if ((threadTime->Get() - time < .125) && nuetralToPush())
+		{
+			FRdrive -> Set(modifier * rampUp( (y - x) / FOUR_WHEEL_LIMITER, .125));
+			FLdrive -> Set(modifier * rampUp( (y + x) / FOUR_WHEEL_LIMITER, .125));
+			BRdrive -> Set(modifier * rampUp( (y - x) / FOUR_WHEEL_LIMITER, .125));
+			BLdrive -> Set(modifier * rampUp( (y + x) / FOUR_WHEEL_LIMITER, .125));
+		}
+		else
+		{
+			FRdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
+			FLdrive -> Set(modifier * ((y + x) / FOUR_WHEEL_LIMITER));
+			BLdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
+			BRdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
+		}
+
+
+		drive->ArcadeDrive(y , x);
 	}
 
 	//Turns robot appropriately when either one of the limit switches are turned on
@@ -260,6 +311,7 @@ public:
 		elevatorTwo = new Victor(ELEVATOR_TWO_PWM_PORT);
 		func = new Joystick(FUNC_JOYSTICK_PORT);
 		driver = new Joystick(DRIVE_JOYSTICK_PORT);
+		smart = new PowerDistributionPanel();
 		//testMotor = new Victor(6);
 		drive = new RobotDrive(FLdrive, BLdrive, FRdrive, BRdrive);
 	}
