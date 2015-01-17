@@ -95,7 +95,7 @@ public:
 			SmartDashboard::PutNumber("LeftAnalog Y axis",
 					driver->GetRawAxis(LeftY));
 
-			//elevatorOne->Set(rampUp(1,12));
+			elevatorOne->Set(rampUp(1,12));
 
 			//LiftControl();
 			FourCIMDrive();
@@ -112,213 +112,182 @@ public:
 	void LiftControl() {
 		float rightAnalogPush = func->GetRawAxis(RightY) * -1;
 		int direction = 0;
+		bool locOne = IRa->Get();
+		bool locTwo = IRb->Get();
+		bool locThree = IRc->Get();
+		bool locFour = IRd->Get();
+		bool locFive = IRe->Get();
 
-		if (rightAnalogPush > .5
-				&& !IRa->Get()) {
-			direction = 1;
-			elevatorOne->Set(ELEVATOR_SPEED);
-		}
-		if (func->GetRawButton(BumperR)
-				&& !IRb->Get()) {
-			direction = 1;
-			elevatorOne->Set(ELEVATOR_SPEED);
-		}
-		if (func->GetRawButton(BumperL)
-				&& !IRc->Get()) {
-			direction = 1;
-			elevatorOne->Set(ELEVATOR_SPEED);
-		}
-		if (func->GetRawAxis(LeftTrigger) > .4
-				&& !IRd->Get()) {
-			direction = 1;
-			elevatorOne->Set(ELEVATOR_SPEED);
-		}
-		if (func->GetRawAxis(RightTrigger) > .4
-				&& !IRe->Get()) {
-			direction = 1;
-			elevatorOne->Set(ELEVATOR_SPEED);
-		}
-		if (IRa->Get() || IRb->Get() || IRc->Get() || IRd->Get() || IRe->Get())
-		{
-			elevatorOne->Set(direction);
-			Wait(0.2);
-		}
-		if (rightAnalogPush < -.5 && !IRa->Get())
-		{
+
+		if (rightAnalogPush < -.5
+				&& !locOne) {
 			direction = -1;
 			elevatorOne->Set(ELEVATOR_SPEED * -1);
 		}
-
-		if (func->GetRawAxis(3) < -.2)
+		if (rightAnalogPush > .5 && !locTwo)
 		{
-			elevatorTwo->Set(-1);
-		}
-		if (func->GetRawAxis(3) > .2)
-		{
-			elevatorTwo->Set(1);
+			direction = 1;
+			elevatorOne->Set(ELEVATOR_SPEED * -1);
 		}
 	}
 
-	/**
-	 * ConfigureEncoders
-	 * sets parameters of Encoders
-	 */
-	void ConfigureEncoders() {
-		cody->SetMaxPeriod(.1);
-		cody->SetMinRate(10);
-		cody->SetDistancePerPulse(5);
-		cody->SetReverseDirection(true);
-		cody->SetSamplesToAverage(7);
+/**
+ * ConfigureEncoders
+ * sets parameters of Encoders
+ */
+void ConfigureEncoders() {
+	cody->SetMaxPeriod(.1);
+	cody->SetMinRate(10);
+	cody->SetDistancePerPulse(5);
+	cody->SetReverseDirection(true);
+	cody->SetSamplesToAverage(7);
 
-		codec->SetMaxPeriod(.1);
-		codec->SetMinRate(10);
-		codec->SetDistancePerPulse(5);
-		codec->SetReverseDirection(true);
-		codec->SetSamplesToAverage(7);
-	}
+	codec->SetMaxPeriod(.1);
+	codec->SetMinRate(10);
+	codec->SetDistancePerPulse(5);
+	codec->SetReverseDirection(true);
+	codec->SetSamplesToAverage(7);
+}
 
-	/**
-	 * absolute value
-	 * returns the absolute value of a number
-	 **/
-	int abs(float num)
+/**
+ * absolute value
+ * returns the absolute value of a number
+ **/
+int abs(float num)
+{
+	if (num < 0)
+		return num * -1;
+	return num;
+}
+
+bool nuetralToPush()
+{
+
+	float magnitude = sqrt(pow(driver->GetRawAxis(LeftX), 2) + pow(driver->GetRawAxis(LeftY), 2));
+	neutral = (magnitude < .2);
+	if (neutral)
+		temp = true;
+	up = (magnitude > .2);
+
+	if (up && temp)
 	{
-		if (num < 0)
-			return num * -1;
-		return num;
+		return true;
+		temp = false;
 	}
+	return false;
+}
 
-	bool nuetralToPush()
+float rampUp(float maxPower, float time)
+{
+
+	currTime = threadTime->Get();
+	float power = 0;
+	SmartDashboard::PutNumber("TIME", currTime);
+	bool fin = currTime >= time;
+	if (!fin)
 	{
-
-		float magnitude = sqrt(pow(driver->GetRawAxis(LeftX), 2) + pow(driver->GetRawAxis(LeftY), 2));
-		neutral = (magnitude < .2);
-		if (neutral)
-			temp = true;
-		up = (magnitude > .2);
-
-		if (up && temp)
-		{
-			return true;
-			temp = false;
-		}
-		return false;
+		power = (-2 * maxPower / pow(time, 3) * pow(currTime, 3)) + (3 * maxPower / pow(time,2) * pow(currTime, 2));
+		SmartDashboard::PutNumber("MotorPower", power);
+		return power;
 	}
-
-	float rampUp(float maxPower, float time)
+	else if (fin)
 	{
-
-		currTime = threadTime->Get();
-		float power = 0;
-		SmartDashboard::PutNumber("TIME", currTime);
-		bool fin = currTime >= time;
-		if (!fin)
-		{
-			power = (-2 * maxPower / pow(time, 3) * pow(currTime, 3)) + (3 * maxPower / pow(time,2) * pow(currTime, 2));
-			SmartDashboard::PutNumber("MotorPower", power);
-			return power;
-		}
-		else if (fin)
-		{
-			SmartDashboard::PutNumber("fin power: " , power);
-			return maxPower;
-		}
-		return 0;
+		SmartDashboard::PutNumber("fin power: " , power);
+		return maxPower;
 	}
+	return 0;
+}
 
 
-	//main Drive code
-	void FourCIMDrive() {
-		float x, y;
+//main Drive code
+void FourCIMDrive() {
+	float x, y;
+	bool ramp = false;
+	x = driver->GetRawAxis(LeftX);
+	y = driver->GetRawAxis(LeftY);
+	float time;
 
-		bool ramp = false;
-		x = driver->GetRawAxis(LeftX);
-		y = driver->GetRawAxis(LeftY);
-		float time;
+	float turn=LimitTeleOp();
+	SmartDashboard::PutNumber("turn: ",turn);
 
-		float turn=LimitTeleOp();
-		SmartDashboard::PutNumber("turn: ",turn);
-
-		if (driver->GetRawButton(BumperR))
-		{
-			modifier = .5;
-		}
-		if (driver->GetRawButton(BumperL))
-		{
-			modifier = .75;
-		}
-		if (driver->GetRawAxis(RightTrigger) > .4)
-		{
-			modifier = 1;
-		}
-
-		if (driver->GetRawButton(ButtonB))
-		{
-			//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
-			if(turn!=0)
-				x=turn;
-		}
-		SmartDashboard::PutBoolean("B Button Press", driver->GetRawButton(ButtonB));
-		SmartDashboard::PutNumber("x: ",x);
-		SmartDashboard::PutNumber("Speed modifier", modifier);
-
-		if (nuetralToPush())
-		{
-			time = threadTime->Get();
-		}
-		if ((threadTime->Get() - time < .125) && nuetralToPush())
-		{
-			FRdrive -> Set(modifier * rampUp( (x - y) / FOUR_WHEEL_LIMITER, .125));
-			FLdrive -> Set(modifier * rampUp( (x + y) / FOUR_WHEEL_LIMITER, .125));
-			BRdrive -> Set(modifier * rampUp( (x - y) / FOUR_WHEEL_LIMITER, .125));
-			BLdrive -> Set(modifier * rampUp( (x + y) / FOUR_WHEEL_LIMITER, .125));
-		}
-		else
-		{
-			FRdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
-			FLdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
-			BLdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
-			BRdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
-		}
-
-
-		//drive->ArcadeDrive(y , x);
-	}
-
-	//Turns robot appropriately when either one of the limit switches are turned on
-	float LimitTeleOp(){
-		float turn = 0.0;
-
-
-		if(limitOne->Get()){
-			turn += 1;
-		}
-		if(limitTwo->Get()){
-			turn -= 1;
-		}
-		return turn;
-	}
-
-	void mainInstance()
+	if (driver->GetRawButton(BumperR))
 	{
-		threadTime = new Timer();
-		threadTime->Reset();
-		cody = new Encoder(ENCODER_ONE_DIGIPORTS, false, Encoder::k4X);
-		codec = new Encoder(ENCODER_TWO_DIGIPORTS, false, Encoder::k4X);
-		limitOne = new DigitalInput(LIMIT_ONE_DIGIPORT);
-		limitTwo = new DigitalInput(LIMIT_TWO_DIGIPORT);
-		FRdrive = new Talon(FR_PWM_DRIVE_PORT);
-		FLdrive = new Talon(FL_PWM_DRIVE_PORT);
-		BRdrive = new Talon(BR_PWM_DRIVE_PORT);
-		BLdrive = new Talon(BL_PWM_DRIVE_PORT);
-		elevatorOne = new Victor(ELEVATOR_PWM_PORT);
-		elevatorTwo = new Victor(ELEVATOR_TWO_PWM_PORT);
-		func = new Joystick(FUNC_JOYSTICK_PORT);
-		driver = new Joystick(DRIVE_JOYSTICK_PORT);
-		smart = new PowerDistributionPanel();
-		//testMotor = new Victor(6);
-		drive = new RobotDrive(FLdrive, BLdrive, FRdrive, BRdrive);
+		modifier = .5;
 	}
+	if (driver->GetRawButton(BumperL))
+	{
+		modifier = .75;
+	}
+	if (driver->GetRawAxis(RightTrigger) > .4)
+	{
+		modifier = 1;
+	}
+
+	if (driver->GetRawButton(ButtonB))
+	{
+		//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
+		if(turn!=0)
+			x=turn;
+	}
+	SmartDashboard::PutBoolean("B Button Press", driver->GetRawButton(ButtonB));
+	SmartDashboard::PutNumber("x: ",x);
+	SmartDashboard::PutNumber("Speed modifier", modifier);
+
+	if (nuetralToPush())
+	{
+		time = threadTime->Get();
+	}
+	if ((threadTime->Get() - time < .125) && nuetralToPush())
+	{
+		FRdrive -> Set(modifier * rampUp((x - y) / FOUR_WHEEL_LIMITER, .125));
+		FLdrive -> Set(modifier * rampUp((x + y) / FOUR_WHEEL_LIMITER, .125));
+		BRdrive -> Set(modifier * rampUp((x - y) / FOUR_WHEEL_LIMITER, .125));
+		BLdrive -> Set(modifier * rampUp((x + y) / FOUR_WHEEL_LIMITER, .125));
+	}
+	else
+	{
+		FRdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
+		FLdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
+		BLdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
+		BRdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
+	}
+	//drive->ArcadeDrive(y , x);
+}
+
+//Turns robot appropriately when either one of the limit switches are turned on
+float LimitTeleOp(){
+	float turn = 0.0;
+
+
+	if(limitOne->Get()){
+		turn += 1;
+	}
+	if(limitTwo->Get()){
+		turn -= 1;
+	}
+	return turn;
+}
+
+void mainInstance()
+{
+	threadTime = new Timer();
+	threadTime->Reset();
+	cody = new Encoder(ENCODER_ONE_DIGIPORTS, false, Encoder::k4X);
+	codec = new Encoder(ENCODER_TWO_DIGIPORTS, false, Encoder::k4X);
+	limitOne = new DigitalInput(LIMIT_ONE_DIGIPORT);
+	limitTwo = new DigitalInput(LIMIT_TWO_DIGIPORT);
+	FRdrive = new Talon(FR_PWM_DRIVE_PORT);
+	FLdrive = new Talon(FL_PWM_DRIVE_PORT);
+	BRdrive = new Talon(BR_PWM_DRIVE_PORT);
+	BLdrive = new Talon(BL_PWM_DRIVE_PORT);
+	elevatorOne = new Victor(ELEVATOR_PWM_PORT);
+	elevatorTwo = new Victor(ELEVATOR_TWO_PWM_PORT);
+	func = new Joystick(FUNC_JOYSTICK_PORT);
+	driver = new Joystick(DRIVE_JOYSTICK_PORT);
+	smart = new PowerDistributionPanel();
+	//testMotor = new Victor(6);
+	drive = new RobotDrive(FLdrive, BLdrive, FRdrive, BRdrive);
+}
 
 };
 
