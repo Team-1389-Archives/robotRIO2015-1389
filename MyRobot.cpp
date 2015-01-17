@@ -31,6 +31,7 @@ class MyRobot: public SampleRobot {
 	Timer* threadTime;
 	bool fin = false;
 	bool neutral, up, temp;
+	float modifier = 1;
 	Joystick *driver, *func;
 	DigitalInput *IRa, *IRb, *IRc, *IRd, *IRe, *limitOne, *limitTwo;
 	Talon *FRdrive, *FLdrive, *BRdrive, *BLdrive;
@@ -229,9 +230,9 @@ public:
 	//main Drive code
 	void FourCIMDrive() {
 		float x, y;
-		int modifier = 1;
+
 		bool ramp = false;
-		x = driver->GetRawAxis(LeftX) * -1;
+		x = driver->GetRawAxis(LeftX);
 		y = driver->GetRawAxis(LeftY);
 		float time;
 
@@ -240,14 +241,17 @@ public:
 
 		if (driver->GetRawButton(BumperR))
 		{
-			if (modifier + .25 < 1)
-				modifier+= .25;
+			modifier = .5;
 		}
 		if (driver->GetRawButton(BumperL))
 		{
-			if (modifier - .25 > 0)
-				modifier-= .25;
+			modifier = .75;
 		}
+		if (driver->GetRawAxis(RightTrigger) > .4)
+		{
+			modifier = 1;
+		}
+
 		if (driver->GetRawButton(ButtonB))
 		{
 			//BLdrive ->Set((y + x) / FOUR_WHEEL_LIMITER);
@@ -264,21 +268,21 @@ public:
 		}
 		if ((threadTime->Get() - time < .125) && nuetralToPush())
 		{
-			FRdrive -> Set(modifier * rampUp( (y - x) / FOUR_WHEEL_LIMITER, .125));
-			FLdrive -> Set(modifier * rampUp( (y + x) / FOUR_WHEEL_LIMITER, .125));
-			BRdrive -> Set(modifier * rampUp( (y - x) / FOUR_WHEEL_LIMITER, .125));
-			BLdrive -> Set(modifier * rampUp( (y + x) / FOUR_WHEEL_LIMITER, .125));
+			FRdrive -> Set(modifier * rampUp( (x - y) / FOUR_WHEEL_LIMITER, .125));
+			FLdrive -> Set(modifier * rampUp( (x + y) / FOUR_WHEEL_LIMITER, .125));
+			BRdrive -> Set(modifier * rampUp( (x - y) / FOUR_WHEEL_LIMITER, .125));
+			BLdrive -> Set(modifier * rampUp( (x + y) / FOUR_WHEEL_LIMITER, .125));
 		}
 		else
 		{
-			FRdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
-			FLdrive -> Set(modifier * ((y + x) / FOUR_WHEEL_LIMITER));
-			BLdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
-			BRdrive -> Set(modifier * ((y - x) / FOUR_WHEEL_LIMITER));
+			FRdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
+			FLdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
+			BLdrive -> Set(modifier * ((x - y) / FOUR_WHEEL_LIMITER));
+			BRdrive -> Set(modifier * ((x + y) / FOUR_WHEEL_LIMITER));
 		}
 
 
-		drive->ArcadeDrive(y , x);
+		//drive->ArcadeDrive(y , x);
 	}
 
 	//Turns robot appropriately when either one of the limit switches are turned on
